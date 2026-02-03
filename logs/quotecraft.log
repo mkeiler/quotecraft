@@ -1,0 +1,45 @@
+2026-02-03 14:30:24,930 | DEBUG    | quotecraft | log_debug:88 | Initializing database path=E:\dev\marco\streamlit\quotecraft\quotecraft.db
+2026-02-03 14:30:31,063 | DEBUG    | quotecraft | log_debug:88 | Initializing database path=E:\dev\marco\streamlit\quotecraft\quotecraft.db
+2026-02-03 14:30:31,066 | INFO     | quotecraft | log_info:94 | Debug panel accessed
+2026-02-03 14:31:03,280 | DEBUG    | quotecraft | log_debug:88 | Initializing database path=E:\dev\marco\streamlit\quotecraft\quotecraft.db
+2026-02-03 14:31:13,093 | DEBUG    | quotecraft | log_debug:88 | Initializing database path=E:\dev\marco\streamlit\quotecraft\quotecraft.db
+2026-02-03 14:31:13,122 | DEBUG    | quotecraft | log_debug:88 | Login attempt username=admin
+2026-02-03 14:31:13,122 | INFO     | quotecraft | log_info:94 | Login successful username=admin
+2026-02-03 14:31:13,153 | DEBUG    | quotecraft | log_debug:88 | Initializing database path=E:\dev\marco\streamlit\quotecraft\quotecraft.db
+2026-02-03 14:31:18,845 | DEBUG    | quotecraft | log_debug:88 | Initializing database path=E:\dev\marco\streamlit\quotecraft\quotecraft.db
+2026-02-03 14:31:22,439 | DEBUG    | quotecraft | log_debug:88 | Initializing database path=E:\dev\marco\streamlit\quotecraft\quotecraft.db
+2026-02-03 14:31:28,151 | DEBUG    | quotecraft | log_debug:88 | Initializing database path=E:\dev\marco\streamlit\quotecraft\quotecraft.db
+2026-02-03 14:31:28,154 | DEBUG    | quotecraft | log_debug:88 | Login attempt username=admin
+2026-02-03 14:31:28,154 | INFO     | quotecraft | log_info:94 | Login successful username=admin
+2026-02-03 14:31:28,185 | DEBUG    | quotecraft | log_debug:88 | Initializing database path=E:\dev\marco\streamlit\quotecraft\quotecraft.db
+2026-02-03 14:31:28,188 | INFO     | quotecraft | log_info:94 | Debug panel accessed
+2026-02-03 14:31:40,073 | DEBUG    | quotecraft | log_debug:88 | Initializing database path=E:\dev\marco\streamlit\quotecraft\quotecraft.db
+2026-02-03 14:31:40,075 | INFO     | quotecraft | log_info:94 | Debug panel accessed
+2026-02-03 14:31:40,130 | DEBUG    | quotecraft | log_debug:88 | Initializing database path=E:\dev\marco\streamlit\quotecraft\quotecraft.db
+2026-02-03 14:31:40,132 | INFO     | quotecraft | log_info:94 | Debug panel accessed
+2026-02-03 14:31:43,411 | DEBUG    | quotecraft | log_debug:88 | Initializing database path=E:\dev\marco\streamlit\quotecraft\quotecraft.db
+2026-02-03 14:31:43,413 | INFO     | quotecraft | log_info:94 | Debug panel accessed
+2026-02-03 14:31:43,467 | DEBUG    | quotecraft | log_debug:88 | Initializing database path=E:\dev\marco\streamlit\quotecraft\quotecraft.db
+2026-02-03 14:31:43,469 | INFO     | quotecraft | log_info:94 | Debug panel accessed
+2026-02-03 14:31:48,994 | DEBUG    | quotecraft | log_debug:88 | Initializing database path=E:\dev\marco\streamlit\quotecraft\quotecraft.db
+2026-02-03 14:31:51,211 | DEBUG    | quotecraft | log_debug:88 | Initializing database path=E:\dev\marco\streamlit\quotecraft\quotecraft.db
+2026-02-03 14:31:55,652 | DEBUG    | quotecraft | log_debug:88 | Initializing database path=E:\dev\marco\streamlit\quotecraft\quotecraft.db
+2026-02-03 14:32:02,492 | DEBUG    | quotecraft | log_debug:88 | Initializing database path=E:\dev\marco\streamlit\quotecraft\quotecraft.db
+2026-02-03 14:32:05,667 | DEBUG    | quotecraft | log_debug:88 | Initializing database path=E:\dev\marco\streamlit\quotecraft\quotecraft.db
+2026-02-03 14:32:08,661 | DEBUG    | quotecraft | log_debug:88 | Initializing database path=E:\dev\marco\streamlit\quotecraft\quotecraft.db
+2026-02-03 14:32:09,918 | DEBUG    | quotecraft | log_debug:88 | Initializing database path=E:\dev\marco\streamlit\quotecraft\quotecraft.db
+2026-02-03 14:32:09,921 | INFO     | quotecraft | log_info:94 | Debug panel accessed
+2026-02-03 14:32:17,691 | DEBUG    | quotecraft | log_debug:88 | Initializing database path=E:\dev\marco\streamlit\quotecraft\quotecraft.db
+2026-02-03 14:33:48,471 | DEBUG    | quotecraft | log_debug:88 | Initializing database path=E:\dev\marco\streamlit\quotecraft\quotecraft.db
+2026-02-03 14:33:54,590 | DEBUG    | quotecraft | log_debug:88 | Initializing database path=E:\dev\marco\streamlit\quotecraft\quotecraft.db
+2026-02-03 14:33:54,642 | DEBUG    | quotecraft | log_debug:88 | Initializing database path=E:\dev\marco\streamlit\quotecraft\quotecraft.db
+2026-02-03 14:34:03,357 | DEBUG    | quotecraft | log_debug:88 | Initializing database path=E:\dev\marco\streamlit\quotecraft\quotecraft.db
+2026-02-03 14:34:03,474 | INFO     | quotecraft | log_info:94 | Token created quote_id=4 | expires_in_days=30
+2026-02-03 14:34:03,474 | DEBUG    | quotecraft | log_debug:88 | Email button clicked quote_id=4 | token=0yE-6SKe...
+2026-02-03 14:34:03,475 | DEBUG    | quotecraft | log_debug:88 | SMTP config loaded from secrets server=localhost | port=1025
+2026-02-03 14:34:03,475 | INFO     | quotecraft | log_info:94 | Sending quote email to=mkeiler@unicamp.br | quote=QT-2026-0003
+2026-02-03 14:34:05,868 | ERROR    | quotecraft | log_error:106 | SMTP error error=STARTTLS extension not supported by server.
+2026-02-03 14:35:14,505 | DEBUG    | quotecraft | log_debug:88 | Initializing database path=E:\dev\marco\streamlit\quotecraft\quotecraft.db
+2026-02-03 14:35:14,508 | INFO     | quotecraft | log_info:94 | Debug panel accessed
+2026-02-03 14:35:14,564 | DEBUG    | quotecraft | log_debug:88 | Initializing database path=E:\dev\marco\streamlit\quotecraft\quotecraft.db
+2026-02-03 14:35:14,567 | INFO     | quotecraft | log_info:94 | Debug panel accessed

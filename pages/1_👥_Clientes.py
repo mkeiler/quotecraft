@@ -13,6 +13,7 @@ from database.operations import (
     search_clients,
     update_client,
 )
+from services.auth import require_auth, render_logout_button
 from utils.validators import sanitize_text, validate_email, validate_phone
 
 # ---------------------------------------------------------------------------
@@ -22,14 +23,33 @@ from utils.validators import sanitize_text, validate_email, validate_phone
 st.set_page_config(page_title="Clientes - QuoteCraft", page_icon="👥", layout="wide")
 init_database()
 
+# Authentication check
+if not require_auth():
+    st.stop()
+
+render_logout_button()
+
 # Re-apply custom CSS (each page is a separate script)
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     h1,h2,h3,h4,h5,h6 { font-family: 'Space Grotesk', sans-serif; color: #2E5266; }
-    .stButton > button { background-color: #73A580; color: white; border-radius: 8px; padding: 0.5rem 1.5rem; font-weight: 500; border: none; }
+    .stButton > button { background-color: #73A580; color: white; border-radius: 8px; padding: 0.5rem 1rem; font-weight: 500; border: none; }
     .stButton > button:hover { background-color: #5E8A6A; }
+    /* Prevent columns from stacking on mobile */
+    [data-testid="stHorizontalBlock"] {
+        flex-wrap: nowrap !important;
+        gap: 0.5rem;
+    }
+    [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
+        flex: 1 1 0 !important;
+        min-width: 0 !important;
+    }
+    /* Compact buttons on mobile */
+    @media (max-width: 640px) {
+        .stButton > button { padding: 0.4rem 0.5rem; font-size: 0.85rem; }
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -105,19 +125,16 @@ if df.empty:
 else:
     st.subheader(f"Clientes ({len(df)})")
     for _, row in df.iterrows():
-        with st.container():
-            cols = st.columns([3, 3, 2, 2, 1, 1])
-            cols[0].write(f"**{row['name']}**")
-            cols[1].write(row["email"])
-            cols[2].write(row.get("phone") or "—")
-            cols[3].write(row.get("company") or "—")
-
-            if cols[4].button("✏️", key=f"edit_{row['id']}", help="Editar"):
-                st.session_state[f"editing_client"] = int(row["id"])
-            if cols[5].button("🗑️", key=f"del_{row['id']}", help="Deletar"):
-                st.session_state[f"confirm_delete_client"] = int(row["id"])
-
-        st.divider()
+        with st.container(border=True):
+            st.markdown(f"**{row['name']}** — {row['email']}")
+            phone_info = row.get("phone") or "—"
+            company_info = row.get("company") or "—"
+            st.caption(f"📱 {phone_info}  •  🏢 {company_info}")
+            b1, b2 = st.columns(2)
+            if b1.button("✏️", key=f"edit_{row['id']}", use_container_width=True, help="Editar"):
+                st.session_state["editing_client"] = int(row["id"])
+            if b2.button("🗑️", key=f"del_{row['id']}", use_container_width=True, help="Excluir"):
+                st.session_state["confirm_delete_client"] = int(row["id"])
 
 # ---------------------------------------------------------------------------
 # D) Confirmação de Exclusão
