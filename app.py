@@ -3,11 +3,11 @@
 import streamlit as st
 
 from database.models import init_database, get_connection
-from services.auth import require_auth, render_logout_button
+from services.auth import require_auth, render_logout_button, hide_admin_pages_css
 
 
 def apply_custom_css() -> None:
-    """Inject custom fonts and styling."""
+    """Inject custom fonts and styling with mobile responsiveness."""
     st.markdown("""
         <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
@@ -37,6 +37,64 @@ def apply_custom_css() -> None:
         [data-testid="stMetricValue"] {
             color: #2E5266;
             font-family: 'Space Grotesk', sans-serif;
+        }
+
+        /* Hero section */
+        .hero-section {
+            background: linear-gradient(135deg, #2E5266 0%, #4A7C59 100%);
+            padding: 2rem;
+            border-radius: 16px;
+            color: white;
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+        .hero-section h1 {
+            color: white !important;
+            margin-bottom: 0.5rem;
+        }
+        .hero-section p {
+            color: rgba(255,255,255,0.9);
+            margin: 0;
+        }
+
+        /* Metric cards */
+        .metric-card {
+            background: white;
+            padding: 1.25rem;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            border: 1px solid #e8e8e8;
+        }
+
+        /* Prevent columns from stacking on mobile */
+        [data-testid="stHorizontalBlock"] {
+            flex-wrap: nowrap !important;
+            gap: 0.5rem;
+        }
+        [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
+            flex: 1 1 0 !important;
+            min-width: 0 !important;
+        }
+
+        /* Mobile adjustments */
+        @media (max-width: 640px) {
+            .stButton > button {
+                padding: 0.4rem 0.5rem;
+                font-size: 0.85rem;
+            }
+            [data-testid="stMetricValue"] {
+                font-size: 1.1rem !important;
+            }
+            [data-testid="stMetricLabel"] {
+                font-size: 0.75rem !important;
+            }
+            .hero-section {
+                padding: 1.25rem;
+                border-radius: 12px;
+            }
+            .hero-section h1 {
+                font-size: 1.5rem !important;
+            }
         }
         </style>
     """, unsafe_allow_html=True)
@@ -87,20 +145,16 @@ def main() -> None:
         st.stop()
 
     render_logout_button()
+    hide_admin_pages_css()
     apply_custom_css()
 
-    st.markdown(
-        "<h1 style='text-align:center;'>QuoteCraft</h1>",
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        "<p style='text-align:center;color:#555;'>"
-        "Sistema de gerenciamento de orçamentos — simples, rápido e funcional."
-        "</p>",
-        unsafe_allow_html=True,
-    )
-
-    st.divider()
+    # Hero section
+    st.markdown("""
+        <div class="hero-section">
+            <h1>📋 QuoteCraft</h1>
+            <p>Sistema de gerenciamento de orçamentos — simples, rápido e funcional.</p>
+        </div>
+    """, unsafe_allow_html=True)
 
     stats = get_stats()
 

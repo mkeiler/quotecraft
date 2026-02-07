@@ -1,4 +1,4 @@
-"""CRUD operations for clients, services, and quotes."""
+"""CRUD operations for clients, services, and quotes with ownership support."""
 
 from __future__ import annotations
 
@@ -12,6 +12,46 @@ from database.models import get_connection
 
 
 # ---------------------------------------------------------------------------
+# Permission Helpers
+# ---------------------------------------------------------------------------
+
+def can_modify_item(table: str, item_id: int, user_id: Optional[int], user_is_admin: bool) -> bool:
+    """Check if user can modify (edit/delete) an item.
+
+    Admin can modify anything. Regular users can only modify items they own.
+    """
+    if user_is_admin:
+        return True
+
+    if user_id is None:
+        return False
+
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            f"SELECT created_by_user_id FROM {table} WHERE id = ?",
+            (item_id,)
+        ).fetchone()
+        return row is not None and row["created_by_user_id"] == user_id
+    finally:
+        conn.close()
+
+
+def toggle_item_visibility(table: str, item_id: int) -> bool:
+    """Toggle the is_public flag of an item."""
+    conn = get_connection()
+    try:
+        conn.execute(
+            f"UPDATE {table} SET is_public = NOT is_public, updated_at = ? WHERE id = ?",
+            (datetime.now().isoformat(), item_id)
+        )
+        conn.commit()
+        return True
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
 # Clients
 # ---------------------------------------------------------------------------
 
@@ -21,14 +61,16 @@ def create_client(
     phone: Optional[str] = None,
     company: Optional[str] = None,
     address: Optional[str] = None,
+    created_by_user_id: Optional[int] = None,
+    is_public: bool = False,
 ) -> int:
     """Insert a new client and return its id."""
     conn = get_connection()
     try:
         cursor = conn.execute(
-            """INSERT INTO clients (name, email, phone, company, address)
-               VALUES (?, ?, ?, ?, ?)""",
-            (name, email, phone, company, address),
+            """INSERT INTO clients (name, email, phone, company, address, created_by_user_id, is_public)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (name, email, phone, company, address, created_by_user_id, int(is_public)),
         )
         conn.commit()
         return cursor.lastrowid
@@ -36,11 +78,32 @@ def create_client(
         conn.close()
 
 
-def get_all_clients() -> pd.DataFrame:
-    """Return all clients as a DataFrame."""
+def get_all_clients(
+    user_id: Optional[int] = None,
+    include_public: bool = True,
+) -> pd.DataFrame:
+    """Return clients visible to the user.
+
+    If user_id is None, returns all clients (admin view).
+    Otherwise, returns user's own clients + public clients (if include_public).
+    """
     conn = get_connection()
     try:
-        df = pd.read_sql_query("SELECT * FROM clients ORDER BY name", conn)
+        if user_id is None:
+            # Admin view - return all
+            query = "SELECT * FROM clients ORDER BY name"
+            df = pd.read_sql_query(query, conn)
+        else:
+            # User view - own + public
+            if include_public:
+                query = """SELECT * FROM clients
+                           WHERE created_by_user_id = ? OR is_public = 1
+                           ORDER BY name"""
+            else:
+                query = """SELECT * FROM clients
+                           WHERE created_by_user_id = ?
+                           ORDER BY name"""
+            df = pd.read_sql_query(query, conn, params=(user_id,))
         return df
     finally:
         conn.close()
@@ -87,17 +150,34 @@ def delete_client(client_id: int) -> bool:
         conn.close()
 
 
-def search_clients(query: str) -> pd.DataFrame:
-    """Search clients by name or email (case-insensitive)."""
+def search_clients(
+    query: str,
+    user_id: Optional[int] = None,
+    include_public: bool = True,
+) -> pd.DataFrame:
+    """Search clients by name or email (case-insensitive), with ownership filter."""
     conn = get_connection()
     try:
-        df = pd.read_sql_query(
-            """SELECT * FROM clients
-               WHERE name LIKE ? OR email LIKE ?
-               ORDER BY name""",
-            conn,
-            params=(f"%{query}%", f"%{query}%"),
-        )
+        if user_id is None:
+            # Admin view
+            sql = """SELECT * FROM clients
+                     WHERE name LIKE ? OR email LIKE ?
+                     ORDER BY name"""
+            df = pd.read_sql_query(sql, conn, params=(f"%{query}%", f"%{query}%"))
+        else:
+            # User view
+            if include_public:
+                sql = """SELECT * FROM clients
+                         WHERE (name LIKE ? OR email LIKE ?)
+                         AND (created_by_user_id = ? OR is_public = 1)
+                         ORDER BY name"""
+                df = pd.read_sql_query(sql, conn, params=(f"%{query}%", f"%{query}%", user_id))
+            else:
+                sql = """SELECT * FROM clients
+                         WHERE (name LIKE ? OR email LIKE ?)
+                         AND created_by_user_id = ?
+                         ORDER BY name"""
+                df = pd.read_sql_query(sql, conn, params=(f"%{query}%", f"%{query}%", user_id))
         return df
     finally:
         conn.close()
@@ -112,14 +192,16 @@ def create_service(
     description: Optional[str],
     base_price: float,
     category: Optional[str] = None,
+    created_by_user_id: Optional[int] = None,
+    is_public: bool = False,
 ) -> int:
     """Insert a new service and return its id."""
     conn = get_connection()
     try:
         cursor = conn.execute(
-            """INSERT INTO services (name, description, base_price, category)
-               VALUES (?, ?, ?, ?)""",
-            (name, description, base_price, category),
+            """INSERT INTO services (name, description, base_price, category, created_by_user_id, is_public)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (name, description, base_price, category, created_by_user_id, int(is_public)),
         )
         conn.commit()
         return cursor.lastrowid
@@ -127,15 +209,33 @@ def create_service(
         conn.close()
 
 
-def get_all_services(active_only: bool = True) -> pd.DataFrame:
-    """Return services as a DataFrame, optionally filtering active only."""
+def get_all_services(
+    active_only: bool = True,
+    user_id: Optional[int] = None,
+    include_public: bool = True,
+) -> pd.DataFrame:
+    """Return services visible to the user, optionally filtering active only."""
     conn = get_connection()
     try:
-        query = "SELECT * FROM services"
+        conditions = []
+        params = []
+
         if active_only:
-            query += " WHERE is_active = 1"
+            conditions.append("is_active = 1")
+
+        if user_id is not None:
+            if include_public:
+                conditions.append("(created_by_user_id = ? OR is_public = 1)")
+            else:
+                conditions.append("created_by_user_id = ?")
+            params.append(user_id)
+
+        query = "SELECT * FROM services"
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
         query += " ORDER BY name"
-        df = pd.read_sql_query(query, conn)
+
+        df = pd.read_sql_query(query, conn, params=params if params else None)
         return df
     finally:
         conn.close()
@@ -239,6 +339,8 @@ def create_quote(
     discount_value: float = 0,
     notes: str = "",
     status: str = "draft",
+    created_by_user_id: Optional[int] = None,
+    is_public: bool = False,
 ) -> int:
     """Create a quote with its items in a single transaction.
 
@@ -254,8 +356,8 @@ def create_quote(
         cursor = conn.execute(
             """INSERT INTO quotes
                (quote_number, client_id, issue_date, valid_until,
-                discount_type, discount_value, notes, status)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                discount_type, discount_value, notes, status, created_by_user_id, is_public)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 quote_number,
                 client_id,
@@ -265,6 +367,8 @@ def create_quote(
                 discount_value,
                 notes or None,
                 status,
+                created_by_user_id,
+                int(is_public),
             ),
         )
         quote_id = cursor.lastrowid
@@ -285,21 +389,38 @@ def create_quote(
         conn.close()
 
 
-def get_all_quotes(status_filter: Optional[str] = None) -> pd.DataFrame:
-    """Return quotes joined with client name, optionally filtered by status."""
+def get_all_quotes(
+    status_filter: Optional[str] = None,
+    user_id: Optional[int] = None,
+    include_public: bool = True,
+) -> pd.DataFrame:
+    """Return quotes joined with client name, with ownership filtering."""
     conn = get_connection()
     try:
+        conditions = []
+        params: list[Any] = []
+
+        if status_filter:
+            conditions.append("q.status = ?")
+            params.append(status_filter)
+
+        if user_id is not None:
+            if include_public:
+                conditions.append("(q.created_by_user_id = ? OR q.is_public = 1)")
+            else:
+                conditions.append("q.created_by_user_id = ?")
+            params.append(user_id)
+
         query = """
             SELECT q.*, c.name AS client_name
             FROM quotes q
             JOIN clients c ON q.client_id = c.id
         """
-        params: list[Any] = []
-        if status_filter:
-            query += " WHERE q.status = ?"
-            params.append(status_filter)
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
         query += " ORDER BY q.id DESC"
-        return pd.read_sql_query(query, conn, params=params)
+
+        return pd.read_sql_query(query, conn, params=params if params else None)
     finally:
         conn.close()
 
@@ -460,14 +581,25 @@ def delete_quote(quote_id: int) -> bool:
         conn.close()
 
 
-def get_quotes_by_client(client_id: int) -> pd.DataFrame:
-    """Return all quotes for a given client."""
+def get_quotes_by_client(
+    client_id: int,
+    user_id: Optional[int] = None,
+    include_public: bool = True,
+) -> pd.DataFrame:
+    """Return all quotes for a given client, with ownership filtering."""
     conn = get_connection()
     try:
-        return pd.read_sql_query(
-            "SELECT * FROM quotes WHERE client_id = ? ORDER BY id DESC",
-            conn,
-            params=(client_id,),
-        )
+        conditions = ["client_id = ?"]
+        params: list[Any] = [client_id]
+
+        if user_id is not None:
+            if include_public:
+                conditions.append("(created_by_user_id = ? OR is_public = 1)")
+            else:
+                conditions.append("created_by_user_id = ?")
+            params.append(user_id)
+
+        query = "SELECT * FROM quotes WHERE " + " AND ".join(conditions) + " ORDER BY id DESC"
+        return pd.read_sql_query(query, conn, params=params)
     finally:
         conn.close()

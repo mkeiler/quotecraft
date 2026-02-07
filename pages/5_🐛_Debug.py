@@ -8,7 +8,7 @@ from datetime import datetime
 import streamlit as st
 
 from database.models import init_database, get_connection
-from services.auth import require_auth, render_logout_button
+from services.auth import require_admin, render_logout_button
 from utils.debug import (
     is_debug_mode,
     get_session_state_summary,
@@ -26,8 +26,8 @@ from utils.debug import (
 st.set_page_config(page_title="Debug - QuoteCraft", page_icon="🐛", layout="wide")
 init_database()
 
-# Authentication check
-if not require_auth():
+# Authentication check (admin only)
+if not require_admin():
     st.stop()
 
 render_logout_button()
@@ -143,7 +143,7 @@ with tab3:
 
     table = st.selectbox(
         "Selecione a tabela",
-        ["clients", "services", "quotes", "quote_items"]
+        ["users", "clients", "services", "quotes", "quote_items"]
     )
 
     limit = st.slider("Limite de registros", 10, 100, 25)

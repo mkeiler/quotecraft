@@ -6,14 +6,16 @@ import streamlit as st
 
 from database.models import init_database
 from database.operations import (
+    can_modify_item,
     create_service,
     delete_service,
     get_all_services,
     get_service_by_id,
+    toggle_item_visibility,
     toggle_service_status,
     update_service,
 )
-from services.auth import require_auth, render_logout_button
+from services.auth import require_auth, render_logout_button, get_current_user_id, is_admin, hide_admin_pages_css
 from utils.validators import sanitize_text, validate_price
 
 # ---------------------------------------------------------------------------
@@ -28,6 +30,11 @@ if not require_auth():
     st.stop()
 
 render_logout_button()
+hide_admin_pages_css()
+
+# Get user context
+current_user_id = get_current_user_id()
+user_is_admin = is_admin()
 
 st.markdown("""
     <style>
@@ -74,6 +81,13 @@ with st.expander("➕ Novo Serviço", expanded=False):
             description = st.text_area("Descrição", height=80)
             category = st.text_input("Categoria")
 
+        # Visibility option
+        is_public = st.checkbox(
+            "🌐 Visivel para todos os usuarios",
+            value=False,
+            help="Marque para que outros usuarios possam usar este servico"
+        )
+
         submitted = st.form_submit_button("Adicionar Serviço", use_container_width=True)
 
     if submitted:
@@ -99,6 +113,8 @@ with st.expander("➕ Novo Serviço", expanded=False):
                     description=description or None,
                     base_price=price_val,
                     category=category or None,
+                    created_by_user_id=current_user_id,
+                    is_public=is_public,
                 )
                 st.success(f"Serviço **{name}** adicionado com sucesso!")
                 st.rerun()
@@ -114,7 +130,9 @@ fcol1, fcol2 = st.columns([1, 3])
 with fcol1:
     active_only = st.checkbox("Apenas ativos", value=True)
 
-df = get_all_services(active_only=active_only)
+# Get services with ownership filtering
+filter_user_id = None if user_is_admin else current_user_id
+df = get_all_services(active_only=active_only, user_id=filter_user_id)
 
 # Category filter (dynamic)
 if not df.empty and "category" in df.columns:
@@ -134,20 +152,39 @@ if df.empty:
 else:
     st.subheader(f"Serviços ({len(df)})")
     for _, row in df.iterrows():
+        service_id = int(row['id'])
+        is_owner = row.get("created_by_user_id") == current_user_id
+        can_edit = can_modify_item("services", service_id, current_user_id, user_is_admin)
+        visibility_icon = "🌐" if row.get("is_public") else "🔒"
+
         with st.container(border=True):
-            st.markdown(f"**{row['name']}** — {format_brl(row['base_price'])}")
+            # Header with visibility
+            st.markdown(f"**{row['name']}** — {format_brl(row['base_price'])} {visibility_icon}")
+
             desc = row.get("description") or "—"
             desc_truncated = desc[:60] + ("..." if len(str(desc)) > 60 else "")
             status_label = "✅ Ativo" if row["is_active"] else "❌ Inativo"
-            st.caption(f"{desc_truncated}  •  {status_label}")
-            b1, b2, b3 = st.columns(3)
-            if b1.button("✏️", key=f"edit_svc_{row['id']}", use_container_width=True, help="Editar"):
-                st.session_state["editing_service"] = int(row["id"])
-            if b2.button("🔄", key=f"toggle_svc_{row['id']}", use_container_width=True, help="Ativar/Desativar"):
-                toggle_service_status(int(row["id"]))
-                st.rerun()
-            if b3.button("🗑️", key=f"del_svc_{row['id']}", use_container_width=True, help="Excluir"):
-                st.session_state["confirm_delete_service"] = int(row["id"])
+            caption_parts = [desc_truncated, status_label]
+
+            # Show ownership indicator for non-owners
+            if not is_owner and not user_is_admin:
+                caption_parts.append("👤 De outro usuario")
+
+            st.caption("  •  ".join(caption_parts))
+
+            # Action buttons - only for owners or admin
+            if can_edit:
+                b1, b2, b3, b4 = st.columns(4)
+                if b1.button("✏️", key=f"edit_svc_{service_id}", use_container_width=True, help="Editar"):
+                    st.session_state["editing_service"] = service_id
+                if b2.button("🔄", key=f"toggle_svc_{service_id}", use_container_width=True, help="Ativar/Desativar"):
+                    toggle_service_status(service_id)
+                    st.rerun()
+                if b3.button(visibility_icon, key=f"vis_svc_{service_id}", use_container_width=True, help="Alternar visibilidade"):
+                    toggle_item_visibility("services", service_id)
+                    st.rerun()
+                if b4.button("🗑️", key=f"del_svc_{service_id}", use_container_width=True, help="Excluir"):
+                    st.session_state["confirm_delete_service"] = service_id
 
 # ---------------------------------------------------------------------------
 # D) Confirmação de Exclusão (soft-delete)
@@ -157,16 +194,21 @@ if "confirm_delete_service" in st.session_state:
     sid = st.session_state["confirm_delete_service"]
     svc = get_service_by_id(sid)
     if svc:
-        st.warning(f"Tem certeza que deseja excluir o serviço **{svc['name']}**?")
-        c1, c2, _ = st.columns([1, 1, 4])
-        if c1.button("Sim, excluir", key="confirm_svc_del_yes"):
-            delete_service(sid)
-            st.success("Serviço excluído.")
+        # Verify permission
+        if not can_modify_item("services", sid, current_user_id, user_is_admin):
+            st.error("Voce nao tem permissao para excluir este servico.")
             del st.session_state["confirm_delete_service"]
-            st.rerun()
-        if c2.button("Cancelar", key="confirm_svc_del_no"):
-            del st.session_state["confirm_delete_service"]
-            st.rerun()
+        else:
+            st.warning(f"Tem certeza que deseja excluir o serviço **{svc['name']}**?")
+            c1, c2, _ = st.columns([1, 1, 4])
+            if c1.button("Sim, excluir", key="confirm_svc_del_yes"):
+                delete_service(sid)
+                st.success("Serviço excluído.")
+                del st.session_state["confirm_delete_service"]
+                st.rerun()
+            if c2.button("Cancelar", key="confirm_svc_del_no"):
+                del st.session_state["confirm_delete_service"]
+                st.rerun()
 
 # ---------------------------------------------------------------------------
 # E) Modal de Edição
@@ -176,50 +218,63 @@ if "editing_service" in st.session_state:
     sid = st.session_state["editing_service"]
     svc = get_service_by_id(sid)
     if svc:
-        st.subheader(f"Editando: {svc['name']}")
-        with st.form("edit_service_form"):
-            col1, col2 = st.columns(2)
-            with col1:
-                e_name = st.text_input("Nome *", value=svc["name"])
-                e_price = st.text_input(
-                    "Preço Base (R$) *",
-                    value=str(svc["base_price"]).replace(".", ","),
-                )
-            with col2:
-                e_desc = st.text_area("Descrição", value=svc.get("description") or "", height=80)
-                e_cat = st.text_input("Categoria", value=svc.get("category") or "")
-
-            btn1, btn2, _ = st.columns([1, 1, 4])
-            update_btn = btn1.form_submit_button("Atualizar")
-            cancel_btn = btn2.form_submit_button("Cancelar")
-
-        if cancel_btn:
+        # Verify permission
+        if not can_modify_item("services", sid, current_user_id, user_is_admin):
+            st.error("Voce nao tem permissao para editar este servico.")
             del st.session_state["editing_service"]
-            st.rerun()
-
-        if update_btn:
-            e_name = sanitize_text(e_name)
-            price_str = e_price.replace(".", "").replace(",", ".")
-            try:
-                price_val = float(price_str)
-            except ValueError:
-                price_val = -1
-
-            if not e_name:
-                st.error("O nome é obrigatório.")
-            elif not validate_price(price_val):
-                st.error("Preço inválido.")
-            else:
-                try:
-                    update_service(
-                        sid,
-                        name=e_name,
-                        description=sanitize_text(e_desc) or None,
-                        base_price=price_val,
-                        category=sanitize_text(e_cat) or None,
+        else:
+            st.subheader(f"Editando: {svc['name']}")
+            with st.form("edit_service_form"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    e_name = st.text_input("Nome *", value=svc["name"])
+                    e_price = st.text_input(
+                        "Preço Base (R$) *",
+                        value=str(svc["base_price"]).replace(".", ","),
                     )
-                    st.success("Serviço atualizado com sucesso!")
-                    del st.session_state["editing_service"]
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Erro ao atualizar: {e}")
+                with col2:
+                    e_desc = st.text_area("Descrição", value=svc.get("description") or "", height=80)
+                    e_cat = st.text_input("Categoria", value=svc.get("category") or "")
+
+                # Visibility toggle in edit form
+                e_is_public = st.checkbox(
+                    "🌐 Visivel para todos os usuarios",
+                    value=bool(svc.get("is_public")),
+                    help="Marque para que outros usuarios possam usar este servico"
+                )
+
+                btn1, btn2, _ = st.columns([1, 1, 4])
+                update_btn = btn1.form_submit_button("Atualizar")
+                cancel_btn = btn2.form_submit_button("Cancelar")
+
+            if cancel_btn:
+                del st.session_state["editing_service"]
+                st.rerun()
+
+            if update_btn:
+                e_name = sanitize_text(e_name)
+                price_str = e_price.replace(".", "").replace(",", ".")
+                try:
+                    price_val = float(price_str)
+                except ValueError:
+                    price_val = -1
+
+                if not e_name:
+                    st.error("O nome é obrigatório.")
+                elif not validate_price(price_val):
+                    st.error("Preço inválido.")
+                else:
+                    try:
+                        update_service(
+                            sid,
+                            name=e_name,
+                            description=sanitize_text(e_desc) or None,
+                            base_price=price_val,
+                            category=sanitize_text(e_cat) or None,
+                            is_public=int(e_is_public),
+                        )
+                        st.success("Serviço atualizado com sucesso!")
+                        del st.session_state["editing_service"]
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Erro ao atualizar: {e}")

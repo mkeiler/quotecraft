@@ -9,16 +9,18 @@ import streamlit as st
 
 from database.models import init_database
 from database.operations import (
+    can_modify_item,
     create_quote,
     delete_quote,
     get_all_clients,
     get_all_quotes,
     get_all_services,
     get_quote_details,
+    toggle_item_visibility,
     update_quote,
     update_quote_status,
 )
-from services.auth import require_auth, render_logout_button
+from services.auth import require_auth, render_logout_button, get_current_user_id, is_admin, hide_admin_pages_css
 from services.email_service import send_quote_email
 from services.pdf_generator import QuotePDFGenerator
 from services.token_service import ensure_quote_token
@@ -37,6 +39,11 @@ if not require_auth():
     st.stop()
 
 render_logout_button()
+hide_admin_pages_css()
+
+# Get user context
+current_user_id = get_current_user_id()
+user_is_admin = is_admin()
 
 st.markdown("""
     <style>
@@ -124,8 +131,10 @@ def navigate_to(view: str, **kwargs: Any) -> None:
 # Data loading
 # ---------------------------------------------------------------------------
 
-clients_df = get_all_clients()
-services_df = get_all_services(active_only=True)
+# Get data with ownership filtering (admin sees all, users see own + public)
+filter_user_id = None if user_is_admin else current_user_id
+clients_df = get_all_clients(user_id=filter_user_id)
+services_df = get_all_services(active_only=True, user_id=filter_user_id)
 
 
 # ---------------------------------------------------------------------------
@@ -198,6 +207,7 @@ def render_list_view(clients_df: pd.DataFrame) -> None:
 
     quotes_df = get_all_quotes(
         status_filter=status_filter if status_filter != "Todos" else None,
+        user_id=filter_user_id,
     )
     if client_filter != "Todos":
         quotes_df = quotes_df[quotes_df["client_name"] == client_filter]
@@ -208,20 +218,37 @@ def render_list_view(clients_df: pd.DataFrame) -> None:
 
     for _, qrow in quotes_df.iterrows():
         qid = int(qrow["id"])
+        is_owner = qrow.get("created_by_user_id") == current_user_id
+        can_edit = can_modify_item("quotes", qid, current_user_id, user_is_admin)
+        visibility_icon = "🌐" if qrow.get("is_public") else "🔒"
+
         with st.container(border=True):
-            st.markdown(f"**{qrow['quote_number']}** — {qrow['client_name']}")
-            st.caption(f"{format_date(qrow['issue_date'])}  \u2022  {STATUS_LABELS.get(qrow['status'], qrow['status'])}")
-            b1, b2, b3, b4, b5 = st.columns(5)
-            if b1.button("👁️", key=f"view_{qid}", use_container_width=True, help="Ver detalhes"):
-                navigate_to("detail", quote_id=qid)
-            if b2.button("📄", key=f"pdf_{qid}", use_container_width=True, help="Gerar PDF"):
-                st.session_state[f"gen_pdf_{qid}"] = True
-            if b3.button("📧", key=f"email_{qid}", use_container_width=True, help="Enviar por email"):
-                st.session_state[f"send_email_{qid}"] = True
-            if b4.button("✏️", key=f"edit_{qid}", use_container_width=True, help="Editar"):
-                navigate_to("form", quote_id=qid)
-            if b5.button("🗑️", key=f"del_{qid}", use_container_width=True, help="Excluir"):
-                st.session_state[f"confirm_del_quote_{qid}"] = True
+            st.markdown(f"**{qrow['quote_number']}** — {qrow['client_name']} {visibility_icon}")
+            caption_parts = [format_date(qrow['issue_date']), STATUS_LABELS.get(qrow['status'], qrow['status'])]
+            if not is_owner and not user_is_admin:
+                caption_parts.append("👤 De outro usuario")
+            st.caption("  \u2022  ".join(caption_parts))
+
+            # View button available to all who can see, other actions only for owners/admin
+            if can_edit:
+                b1, b2, b3, b4, b5 = st.columns(5)
+                if b1.button("👁️", key=f"view_{qid}", use_container_width=True, help="Ver detalhes"):
+                    navigate_to("detail", quote_id=qid)
+                if b2.button("📄", key=f"pdf_{qid}", use_container_width=True, help="Gerar PDF"):
+                    st.session_state[f"gen_pdf_{qid}"] = True
+                if b3.button("📧", key=f"email_{qid}", use_container_width=True, help="Enviar por email"):
+                    st.session_state[f"send_email_{qid}"] = True
+                if b4.button("✏️", key=f"edit_{qid}", use_container_width=True, help="Editar"):
+                    navigate_to("form", quote_id=qid)
+                if b5.button("🗑️", key=f"del_{qid}", use_container_width=True, help="Excluir"):
+                    st.session_state[f"confirm_del_quote_{qid}"] = True
+            else:
+                # Read-only actions for public quotes from other users
+                b1, b2 = st.columns(2)
+                if b1.button("👁️", key=f"view_{qid}", use_container_width=True, help="Ver detalhes"):
+                    navigate_to("detail", quote_id=qid)
+                if b2.button("📄", key=f"pdf_{qid}", use_container_width=True, help="Gerar PDF"):
+                    st.session_state[f"gen_pdf_{qid}"] = True
 
         # -- PDF generation --
         if st.session_state.get(f"gen_pdf_{qid}"):
@@ -498,6 +525,7 @@ def render_form_view(clients_df: pd.DataFrame, services_df: pd.DataFrame) -> Non
                         discount_value=discount_value,
                         notes=notes,
                         status=form_status,
+                        created_by_user_id=current_user_id,
                     )
                     log_info("Quote created", quote_id=qid, client_id=selected_client_id)
 
